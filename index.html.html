@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Meu Controle Financeiro</title>
+    <style>
+        :root {
+            --green: #2ecc71;
+            --red: #e74c3c;
+            --blue: #3498db;
+            --dark: #2c3e50;
+            --light: #f4f7f6;
+        }
+        body { font-family: sans-serif; background: var(--light); margin: 0; padding: 15px; color: var(--dark); }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        h2 { margin-top: 0; font-size: 1.2rem; display: flex; justify-content: space-between; }
+        
+        /* Resumo */
+        .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .balance-card { grid-column: span 2; text-align: center; background: var(--dark); color: white; padding: 20px; border-radius: 12px; }
+        .stat { font-size: 0.9rem; opacity: 0.8; }
+        .value { font-size: 1.4rem; font-weight: bold; }
+
+        /* Formulários */
+        input, select, button { width: 100%; padding: 12px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
+        button { border: none; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-add { background: var(--green); color: white; }
+        .btn-goal { background: var(--blue); color: white; }
+
+        /* Listas */
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .item-info { display: flex; flex-direction: column; }
+        .item-desc { font-weight: bold; }
+        .item-date { font-size: 0.75rem; color: #888; }
+        .val-in { color: var(--green); }
+        .val-out { color: var(--red); }
+        .delete-btn { color: var(--red); background: none; width: auto; padding: 5px; font-size: 0.8rem; }
+
+        /* Cofrinhos */
+        .goal-progress { background: #eee; height: 10px; border-radius: 5px; margin-top: 8px; overflow: hidden; }
+        .goal-bar { background: var(--blue); height: 100%; transition: 0.5s; }
+        
+        .tabs { display: flex; gap: 5px; margin-bottom: 15px; }
+        .tab-btn { background: #ddd; padding: 10px; font-size: 0.8rem; }
+        .tab-btn.active { background: var(--dark); color: white; }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="balance-card">
+        <div class="stat">Saldo Geral</div>
+        <div class="value" id="total-balance">R$ 0,00</div>
+    </div>
+
+    <div class="summary" style="margin-top: 15px;">
+        <div class="card" style="border-left: 5px solid var(--green);">
+            <div class="stat">Ganhos</div>
+            <div class="val-in" id="total-in">R$ 0,00</div>
+        </div>
+        <div class="card" style="border-left: 5px solid var(--red);">
+            <div class="stat">Gastos</div>
+            <div class="val-out" id="total-out">R$ 0,00</div>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="openTab('transacoes')">💸 Transações</button>
+        <button class="tab-btn" onclick="openTab('cofrinhos')">🐷 Cofrinhos</button>
+        <button class="tab-btn" onclick="openTab('config')">⚙️ Ajustes</button>
+    </div>
+
+    <!-- ABA TRANSAÇÕES -->
+    <div id="transacoes" class="content-section active">
+        <div class="card">
+            <h2>Nova Transação</h2>
+            <input type="text" id="desc" placeholder="Ex: Salário, Aluguel...">
+            <input type="number" id="amount" placeholder="Valor R$">
+            <select id="type">
+                <option value="in">Ganho (+)</option>
+                <option value="out">Gasto (-)</option>
+            </select>
+            <button class="btn-add" onclick="addTransaction()">Adicionar</button>
+        </div>
+
+        <div class="card">
+            <h2>Histórico</h2>
+            <div id="transaction-list"></div>
+        </div>
+    </div>
+
+    <!-- ABA COFRINHOS -->
+    <div id="cofrinhos" class="content-section">
+        <div class="card">
+            <h2>Novo Cofrinho</h2>
+            <input type="text" id="goal-name" placeholder="Ex: Viagem, Carro...">
+            <input type="number" id="goal-target" placeholder="Meta Total R$">
+            <button class="btn-goal" onclick="addGoal()">Criar Meta</button>
+        </div>
+        <div id="goals-list"></div>
+    </div>
+
+    <!-- ABA CONFIGURAÇÕES -->
+    <div id="config" class="content-section">
+        <div class="card">
+            <h2>Backup de Dados</h2>
+            <p style="font-size: 0.8rem; color: #666;">Use os botões abaixo para mover seus dados para outro celular.</p>
+            <button onclick="exportData()">Exportar Backup</button>
+            <button onclick="importData()" style="margin-top: 10px;">Importar Backup</button>
+            <button onclick="clearAll()" style="background: var(--red); color: white; margin-top: 30px;">Limpar Tudo</button>
+        </div>
+    </div>
+
+    <script>
+        let db = JSON.parse(localStorage.getItem('myFinanceDB')) || {
+            transactions: [],
+            goals: []
+        };
+
+        function openTab(tabName) {
+            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        function updateUI() {
+            localStorage.setItem('myFinanceDB', JSON.stringify(db));
+            
+            // Cálculos
+            const totalIn = db.transactions.filter(t => t.type === 'in').reduce((a, b) => a + b.amount, 0);
+            const totalOut = db.transactions.filter(t => t.type === 'out').reduce((a, b) => a + b.amount, 0);
+            const balance = totalIn - totalOut;
+
+            document.getElementById('total-balance').innerText = balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('total-in').innerText = totalIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('total-out').innerText = totalOut.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            // Renderizar Transações
+            const list = document.getElementById('transaction-list');
+            list.innerHTML = db.transactions.map((t, index) => `
+                <div class="list-item">
+                    <div class="item-info">
+                        <span class="item-desc">${t.desc}</span>
+                        <span class="item-date">${t.date}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap: 10px">
+                        <span class="${t.type === 'in' ? 'val-in' : 'val-out'}">
+                            ${t.type === 'in' ? '+' : '-'} ${t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                        <button class="delete-btn" onclick="deleteTransaction(${index})">✕</button>
+                    </div>
+                </div>
+            `).reverse().join('');
+
+            // Renderizar Cofrinhos
+            const goalsList = document.getElementById('goals-list');
+            goalsList.innerHTML = db.goals.map((g, index) => {
+                const percent = Math.min((g.current / g.target) * 100, 100);
+                return `
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between; font-weight:bold">
+                        <span>${g.name}</span>
+                        <span>${g.current.toLocaleString('pt-BR')} / ${g.target.toLocaleString('pt-BR')}</span>
+                    </div>
+                    <div class="goal-progress"><div class="goal-bar" style="width: ${percent}%"></div></div>
+                    <div style="display:flex; gap: 5px; margin-top: 10px">
+                        <button onclick="updateGoal(${index}, 10)">+ R$10</button>
+                        <button onclick="updateGoal(${index}, 50)">+ R$50</button>
+                        <button onclick="deleteGoal(${index})" style="background:#eee; color:red; width:40px">✕</button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function addTransaction() {
+            const desc = document.getElementById('desc').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const type = document.getElementById('type').value;
+
+            if (!desc || !amount) return alert("Preencha tudo!");
+
+            db.transactions.push({
+                desc, amount, type, 
+                date: new Date().toLocaleDateString('pt-BR')
+            });
+            
+            document.getElementById('desc').value = '';
+            document.getElementById('amount').value = '';
+            updateUI();
+        }
+
+        function deleteTransaction(index) {
+            db.transactions.splice(index, 1);
+            updateUI();
+        }
+
+        function addGoal() {
+            const name = document.getElementById('goal-name').value;
+            const target = parseFloat(document.getElementById('goal-target').value);
+            if (!name || !target) return alert("Preencha os dados do cofrinho!");
+            db.goals.push({ name, target, current: 0 });
+            document.getElementById('goal-name').value = '';
+            document.getElementById('goal-target').value = '';
+            updateUI();
+        }
+
+        function updateGoal(index, val) {
+            db.goals[index].current += val;
+            updateUI();
+        }
+
+        function deleteGoal(index) {
+            if(confirm("Excluir este cofrinho?")) {
+                db.goals.splice(index, 1);
+                updateUI();
+            }
+        }
+
+        // Funções de Backup
+        function exportData() {
+            const data = btoa(JSON.stringify(db));
+            prompt("Copie seu código de backup:", data);
+        }
+
+        function importData() {
+            const data = prompt("Cole seu código de backup:");
+            if(data) {
+                db = JSON.parse(atob(data));
+                updateUI();
+            }
+        }
+
+        function clearAll() {
+            if(confirm("TEM CERTEZA? Isso apagará todos os seus gastos e ganhos!")) {
+                db = { transactions: [], goals: [] };
+                updateUI();
+            }
+        }
+
+        updateUI();
+    </script>
+</body>
+</html>
